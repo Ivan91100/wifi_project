@@ -27,7 +27,7 @@ EXCLUDE_MACS = [
 ]
 
 
-# === STEP 1: Load, Clean, and Add Fingerprint ===
+# STEP 1: Load, Clean, and Add Fingerprint
 
 def load_and_clean_data(path, exclude_macs):
     """
@@ -169,6 +169,11 @@ if __name__ == "__main__":
         # Print the first few rows of aggregated features
         print("\nAggregated Features (sample):")
         print(agg_df.head())
+        # ✅ Export the filtered data (MAC excluded and with fingerprint)
+        output_path = r"C:\Users\ivane\OneDrive\Bureau\CSV_file"
+        df_fp.to_csv(output_path, index=False, sep=";", decimal=".")
+        print(f"✅ Filtered data saved to {output_path}")
 
     else:
         print("❌ No data loaded. Exiting.")
+
