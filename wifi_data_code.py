@@ -3,46 +3,76 @@ import glob
 import numpy as np
 import hashlib
 import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# Define the list of MAC addresses to exclude (computers not of interest)
+EXCLUDE_MACS = [
+    'dc:fb:48:68:be:e4',
+    'dc:fb:48:8c:71:fc',
+    'dc:fb:48:2a:52:e0',
+    'dc:fb:48:f5:c6:c2',
+    'dc:fb:48:e3:ab:78',
+    'dc:fb:48:00:51:90',
+    'dc:fb:48:75:d8:42',
+    'dc:fb:48:de:86:8d',
+    'dc:fb:48:dd:c6:0b',
+    'dc:fb:48:55:d5:78',
+    'dc:fb:48:c2:1d:64',
+    '40:ec:99:f9:34:a6',
+    '40:ec:99:8e:3f:63',
+    '40:ec:99:1f:3e:75'
+]
 
 
-# === ETAPE 1 : Chargement, nettoyage et ajout de l'empreinte ===
+# === STEP 1: Load, Clean, and Add Fingerprint ===
 
-def load_and_clean_data(path, dates):
+def load_and_clean_data(path, exclude_macs):
     """
-    Charge et nettoie les données CSV.
+    Loads and cleans CSV data.
     """
-    csv_files = sorted(glob.glob(f"{path}*{dates}*.csv"))
+    # If path is a folder:
+    csv_files = sorted(glob.glob(f"{path}/*.csv"))
+
+    # If path is a direct file (uncomment this line and comment the one above if you have a single file)
+    # csv_files = [path]
+
     if not csv_files:
-        print("[!] Aucun fichier trouvé. Vérifiez le chemin et les dates.")
+        print("[!] No CSV files found. Check the path.")
         return None
 
-    print(f"Chargement de {len(csv_files)} fichiers CSV...")
+    print(f"Loading {len(csv_files)} CSV file(s)...")
     df = pd.concat((pd.read_csv(file, sep=";", decimal=".") for file in csv_files), ignore_index=True)
 
-    # Conversion du champ datetime
+    # Convert 'datetime' field
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
     df = df.dropna(subset=["datetime"])
 
-    # Suppression des doublons basés sur 'src' et 'datetime'
+    # Remove duplicates based on 'src' and 'datetime'
     df = df.drop_duplicates(subset=["src", "datetime"])
 
-    # Filtrage du RSSI (valeurs typiques entre -100 et 0 dBm)
+    # Filter RSSI (typical values between -100 and 0 dBm)
     df = df[(df["rssi"] >= -100) & (df["rssi"] <= 0)]
 
-    # Normalisation du RSSI pour d'éventuelles analyses futures
+    # Normalize RSSI for potential future analyses
     df["rssi_norm"] = (df["rssi"] - df["rssi"].mean()) / df["rssi"].std()
 
-    # Tri par date
+    # Exclude specified MAC addresses
+    df = df[~df["src"].isin(exclude_macs)]
+
+    # Sort by date
     df = df.sort_values(by="datetime").reset_index(drop=True)
 
-    print(f"✅ Nettoyage terminé : {len(df):,} entrées valides.")
+    print(f"✅ Cleaning complete: {len(df):,} valid entries.")
     return df
 
 
 def compute_fingerprint(row):
     """
-    Calcule une empreinte (fingerprint) pour chaque enregistrement en combinant
-    plusieurs champs pour pallier à la randomisation de l'adresse MAC.
+    Computes a fingerprint for each record by combining
+    several fields to mitigate MAC address randomization.
     """
     parts = []
     for col in ['src_vendor', 'oui', 'randomized', 'ch_freq', 'seq_num', 'FCfield', 'dot11elt']:
@@ -55,122 +85,90 @@ def compute_fingerprint(row):
 
 def add_fingerprint(df):
     """
-    Ajoute une colonne 'fingerprint' au DataFrame.
+    Adds a 'fingerprint' column to the DataFrame.
     """
     df['fingerprint'] = df.apply(compute_fingerprint, axis=1)
+    print("✅ Fingerprints added.")
     return df
 
 
-# === ETAPE 2 : Agrégation des données pour extraire des features ===
+# === STEP 2: Aggregate Data to Extract Features ===
 
 def prepare_aggregated_features(df, interval='10min'):
     """
-    Agrège les données par intervalle de temps pour extraire des caractéristiques utiles.
-
-    Pour chaque intervalle, on calcule :
-      - unique_devices: nombre d'appareils uniques (basé sur 'fingerprint')
-      - total_requests: nombre total de probe requests
-      - avg_rssi: moyenne du RSSI
-      - std_rssi: écart-type du RSSI
-      - occupancy: occupation moyenne (valeur de référence présente dans le CSV)
-
-    :param df: DataFrame nettoyé et enrichi
-    :param interval: Intervalle d'agrégation (ex : '10min')
-    :return: DataFrame agrégé
+    Aggregates data by time interval to extract useful features.
     """
     agg_df = df.groupby(pd.Grouper(key='datetime', freq=interval)).agg(
         unique_devices=('fingerprint', 'nunique'),
         total_requests=('fingerprint', 'count'),
         avg_rssi=('rssi', 'mean'),
         std_rssi=('rssi', 'std'),
-        occupancy=('occupancy', 'mean')
-        # On suppose que la colonne 'occupancy' est présente et représente la ground truth
+        occupancy=('occupancy', 'mean')  # Assuming 'occupancy' column is present
     ).reset_index()
 
-    # On retire les intervalles où aucune mesure d'occupation n'est disponible
     agg_df = agg_df.dropna(subset=['occupancy'])
-
+    print("✅ Aggregated features prepared.")
     return agg_df
 
 
-# === ETAPE 3 : Modèle de Machine Learning pour la détection de l'occupation ===
+# === Extra Plots ===
 
-def train_and_evaluate_model(agg_df):
+def plot_device_activity_over_time(df):
     """
-    Entraîne un modèle de régression (ici LinearRegression) pour prédire l'occupation.
-
-    Utilise les features agrégées pour prédire la colonne 'occupancy' (ground truth).
-    Affiche les métriques d'évaluation et trace la comparaison entre valeurs réelles et prédites.
+    Plots the number of unique devices detected over time.
     """
-    from sklearn.model_selection import train_test_split
-    from sklearn.linear_model import LinearRegression
-    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
-    # Sélection des features et de la target
-    features = ['unique_devices', 'total_requests', 'avg_rssi', 'std_rssi']
-    target = 'occupancy'
-
-    X = agg_df[features]
-    y = agg_df[target]
-
-    # Séparation train/test
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Entraînement du modèle
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-
-    # Prédictions
-    y_pred = model.predict(X_test)
-
-    # Évaluation
-    mae = mean_absolute_error(y_test, y_pred)
-    mse = mean_squared_error(y_test, y_pred)
-    rmse = np.sqrt(mse)
-    r2 = r2_score(y_test, y_pred)
-
-    print("=== Évaluation du modèle ===")
-    print(f"MAE  : {mae:.2f}")
-    print(f"RMSE : {rmse:.2f}")
-    print(f"R2   : {r2:.2f}")
-
-    # Affichage d'un graphique comparant les valeurs réelles et prédites
-    plt.figure(figsize=(10, 5))
-    plt.scatter(y_test, y_pred, alpha=0.7, edgecolor='k')
-    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
-    plt.xlabel("Occupancy Réelle")
-    plt.ylabel("Occupancy Prédite")
-    plt.title("Comparaison Occupancy Réelle vs. Prédite")
+    device_counts = df.groupby(pd.Grouper(key='datetime', freq='1H'))['fingerprint'].nunique()
+    plt.figure(figsize=(12, 6))
+    device_counts.plot()
+    plt.xlabel('Time')
+    plt.ylabel('Number of Unique Devices')
+    plt.title('Unique Devices Detected Over Time')
     plt.grid(True)
-    plt.tight_layout()
     plt.show()
 
-    return model
+
+def plot_rssi_distribution(df):
+    """
+    Plots the distribution of RSSI values.
+    """
+    plt.figure(figsize=(10, 5))
+    sns.histplot(df['rssi'], bins=50, kde=True)
+    plt.xlabel('RSSI (dBm)')
+    plt.ylabel('Frequency')
+    plt.title('Distribution of RSSI Values')
+    plt.grid(True)
+    plt.show()
 
 
-# === Pipeline Principal ===
+# === MAIN ===
 
 if __name__ == "__main__":
-    # Définir le chemin et la période des fichiers CSV
-    path = "../DATA/sc6-61/_CSV/position_1/"
-    dates = "2024-03-"
+    # === Define your path ===
 
-    # 1. Chargement et nettoyage des données
-    df = load_and_clean_data(path, dates)
-    if df is None:
-        exit(1)
+    # Example: Folder path (if you have multiple CSV files)
+    path = r"C:\Users\ivane\OneDrive\Bureau\CSV_file"
 
-    # 2. Ajout de l'empreinte pour identifier chaque appareil de façon robuste
-    df = add_fingerprint(df)
+    # Example: Single file path
+    # path = r"C:\Users\ivane\OneDrive\Bureau\CSV_file\your_file.csv"
 
-    # (Optionnel) Affichage d'un aperçu des données
-    print("\nAperçu des données enrichies :")
-    print(df[['datetime', 'src', 'fingerprint', 'rssi', 'occupancy']].head())
+    # === Run processing pipeline ===
+    df_clean = load_and_clean_data(path, EXCLUDE_MACS)
 
-    # 3. Agrégation des données pour extraire les caractéristiques par intervalle
-    agg_df = prepare_aggregated_features(df, interval='10min')
-    print("\nAperçu des features agrégées :")
-    print(agg_df.head())
+    if df_clean is not None:
+        df_fp = add_fingerprint(df_clean)
 
-    # 4. Entraînement et évaluation du modèle de Machine Learning
-    model = train_and_evaluate_model(agg_df)
+        # Plot device activity over time
+        plot_device_activity_over_time(df_fp)
+
+        # Plot RSSI distribution
+        plot_rssi_distribution(df_fp)
+
+        # Aggregate features
+        agg_df = prepare_aggregated_features(df_fp)
+
+        # Print the first few rows of aggregated features
+        print("\nAggregated Features (sample):")
+        print(agg_df.head())
+
+    else:
+        print("❌ No data loaded. Exiting.")
