@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+# === CONFIGURATION ===
 # Define the list of MAC addresses to exclude (computers not of interest)
 EXCLUDE_MACS = [
     'dc:fb:48:68:be:e4',
@@ -26,6 +27,11 @@ EXCLUDE_MACS = [
     '40:ec:99:1f:3e:75'
 ]
 
+# === PARAMETERS ===
+RSSI_MIN = -100  # Minimum acceptable RSSI
+RSSI_MAX = 0     # Maximum acceptable RSSI
+AGG_INTERVAL = '10min'  # Aggregation interval (you can change to '1H', '5min', etc.)
+OUTPUT_FILE = r"C:\Users\ivane\OneDrive\Bureau\CSV_file\filtered_data.csv"
 
 # STEP 1: Load, Clean, and Add Fingerprint
 
@@ -53,8 +59,8 @@ def load_and_clean_data(path, exclude_macs):
     # Remove duplicates based on 'src' and 'datetime'
     df = df.drop_duplicates(subset=["src", "datetime"])
 
-    # Filter RSSI (typical values between -100 and 0 dBm)
-    df = df[(df["rssi"] >= -100) & (df["rssi"] <= 0)]
+    # Filter RSSI (using configurable min and max values)
+    df = df[(df["rssi"] >= RSSI_MIN) & (df["rssi"] <= RSSI_MAX)]
 
     # Normalize RSSI for potential future analyses
     df["rssi_norm"] = (df["rssi"] - df["rssi"].mean()) / df["rssi"].std()
@@ -94,7 +100,7 @@ def add_fingerprint(df):
 
 # === STEP 2: Aggregate Data to Extract Features ===
 
-def prepare_aggregated_features(df, interval='10min'):
+def prepare_aggregated_features(df, interval=AGG_INTERVAL):
     """
     Aggregates data by time interval to extract useful features.
     """
@@ -169,11 +175,10 @@ if __name__ == "__main__":
         # Print the first few rows of aggregated features
         print("\nAggregated Features (sample):")
         print(agg_df.head())
+
         # ✅ Export the filtered data (MAC excluded and with fingerprint)
-        output_path = r"C:\Users\ivane\OneDrive\Bureau\CSV_file"
-        df_fp.to_csv(output_path, index=False, sep=";", decimal=".")
-        print(f"✅ Filtered data saved to {output_path}")
+        df_fp.to_csv(OUTPUT_FILE, index=False, sep=";", decimal=".")
+        print(f"✅ Filtered data saved to {OUTPUT_FILE}")
 
     else:
         print("❌ No data loaded. Exiting.")
-
