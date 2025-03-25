@@ -28,7 +28,7 @@ EXCLUDE_MACS = [
 ]
 
 # === PARAMETERS ===
-RSSI_MIN = -100  # Minimum acceptable RSSI
+RSSI_MIN = -90  # Minimum acceptable RSSI
 RSSI_MAX = 0     # Maximum acceptable RSSI
 AGG_INTERVAL = '10min'  # Aggregation interval (you can change to '1H', '5min', etc.)
 OUTPUT_FILE = r"C:\Users\ivane\OneDrive\Bureau\CSV_file\filtered_data.csv"
