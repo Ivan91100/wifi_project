@@ -31,7 +31,7 @@ EXCLUDE_MACS = [
 RSSI_MIN = -90  # Minimum acceptable RSSI
 RSSI_MAX = 0     # Maximum acceptable RSSI
 AGG_INTERVAL = '10min'  # Aggregation interval (you can change to '1H', '5min', etc.)
-OUTPUT_FILE = r"C:\Users\ivane\OneDrive\Bureau\CSV_file\filtered_data.csv"
+OUTPUT_FILE = r"C:\Users\ivane\OneDrive - ISEP\CSV_file\filtered_data.csv"
 
 # STEP 1: Load, Clean, and Add Fingerprint
 
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     # === Define your path ===
 
     # Example: Folder path (if you have multiple CSV files)
-    path = r"C:\Users\ivane\OneDrive\Bureau\CSV_file"
+    path = r"C:\Users\ivane\OneDrive - ISEP\CSV_file"
 
     # Example: Single file path
     # path = r"C:\Users\ivane\OneDrive\Bureau\CSV_file\your_file.csv"

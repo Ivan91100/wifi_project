@@ -10,7 +10,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import joblib
 
 # PARAMETERS
-FILE_PATH = r"C:\Users\ivane\OneDrive\Bureau\CSV_file"  # Update this with your actual file path
+FILE_PATH = r"C:\Users\ivane\OneDrive - ISEP\CSV_file"  # Update this with your actual file path
 TARGET_COLUMN = "occupancy"  # Number of people in the room
 
 # STEP 1: Load the Raw Data
@@ -79,6 +79,6 @@ plt.tight_layout()
 plt.show()
 
 # STEP 8: Save the Best Model and Scaler
-joblib.dump(scaler, r"C:\Users\ivane\OneDrive\Bureau\CSV_file\scaler.pkl")
-joblib.dump(rf_model, r"C:\Users\ivane\OneDrive\Bureau\CSV_file\occupancy_rf_model.pkl")
+joblib.dump(scaler, r"C:\Users\ivane\OneDrive - ISEP\CSV_file\scaler.pkl")
+joblib.dump(rf_model, r"C:\Users\ivane\OneDrive - ISEP\CSV_file\occupancy_rf_model.pkl")
 print("Model and scaler saved.")
